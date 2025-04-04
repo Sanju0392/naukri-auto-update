@@ -1,63 +1,55 @@
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import os
+import time
 
-# Load credentials from environment variables
-email = os.environ["NAUKRI_EMAIL"]
-password = os.environ["NAUKRI_PASSWORD"]
+USERNAME = os.getenv("NAUKRI_USERNAME")
+PASSWORD = os.getenv("NAUKRI_PASSWORD")
+RESUME_PATH = os.getenv("RESUME_PATH", "resume.pdf")
 
-# Set up Chrome options
-options = Options()
-options.add_argument("--headless")
-options.add_argument("--no-sandbox")
-options.add_argument("--disable-dev-shm-usage")
-options.add_argument("--window-size=1920,1080")
-options.add_argument("--disable-gpu")
+def upload_resume():
+    options = Options()
+    options.add_argument("--headless=new")  # ✅ new headless mode
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")  # 👈 important for rendering
 
-# Initialize the driver
-driver = webdriver.Chrome(options=options)
 
-try:
-    print("🔐 Opening Naukri login page...")
-    driver.get("https://www.naukri.com/mnjuser/profile/login")
-
-    # Wait for the page to load
+    driver = webdriver.Chrome(options=options)
     wait = WebDriverWait(driver, 20)
-    wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
 
-    # Check for iframes and switch if necessary
-    iframes = driver.find_elements(By.TAG_NAME, "iframe")
-    if iframes:
-        print(f"Found {len(iframes)} iframe(s). Switching to first iframe.")
-        driver.switch_to.frame(iframes[0])
+    try:
+        driver.get("https://www.naukri.com/nlogin/login")
 
-    # Locate and fill username field
-    username_field = wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
-    username_field.send_keys(email)
+        # Wait for and enter username
+        wait.until(EC.presence_of_element_located((By.XPATH, '//input[@placeholder="Enter your active Email ID / Username"]'))).send_keys(USERNAME)
 
-    # Locate and fill password field
-    password_field = wait.until(EC.presence_of_element_located((By.ID, "passwordField")))
-    password_field.send_keys(password)
+        # Enter password
+        driver.find_element(By.XPATH, '//input[@placeholder="Enter your password"]').send_keys(PASSWORD)
 
-    # Click login button (adjust locator as needed)
-    login_button = wait.until(EC.element_to_be_clickable((By.CLASS_NAME, "waves-effect")))
-    login_button.click()
+        # Click login
+        driver.find_element(By.XPATH, '//button[text()="Login"]').click()
 
-    # Verify login success
-    wait.until(EC.url_contains("naukri.com/mnjuser"))
-    print("✅ Logged in successfully.")
+        # Wait for profile page redirect (or do it manually)
+        time.sleep(5)
+        driver.get("https://www.naukri.com/mnjuser/profile")
 
-except Exception as e:
-    print("❌ An error occurred:", e)
-    # Save debug info
-    driver.save_screenshot("error_page.png")
-    with open("error_dump.html", "w", encoding="utf-8") as f:
-        f.write(driver.page_source)
-    raise
+        # Wait for resume upload field
+        upload_input = wait.until(EC.presence_of_element_located((By.XPATH, '//input[@type="file"]')))
+        upload_input.send_keys(os.path.abspath(RESUME_PATH))
 
-finally:
-    driver.quit()
-    print("🧹 Browser closed.")
+        time.sleep(5)  # Wait for upload to complete
+        print("✅ Resume uploaded successfully!")
+
+    except Exception as e:
+        print("❌ Error:", e)
+
+    finally:
+        driver.quit()
+
+if __name__ == "__main__":
+    upload_resume()
